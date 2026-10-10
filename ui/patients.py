@@ -45,6 +45,9 @@ class PatientsPage(tk.Frame):
         self.tree.pack(fill="both", expand=True, padx=20, pady=5)
         scrollbar.pack(side="right", fill="y")
 
+        self.empty_label = tk.Label(self.tree, text="No patients found.",
+                                    bg="white", fg="#95a5a6", font=("Arial", 12))
+
         # ── Action Buttons ───────────────────────────────
         btn_frame = tk.Frame(self, bg="#ecf0f1")
         btn_frame.pack(pady=8)
@@ -73,6 +76,11 @@ class PatientsPage(tk.Frame):
 
             for row in cursor.fetchall():
                 self.tree.insert("", "end", values=row)
+
+        if not self.tree.get_children():
+            self.empty_label.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.empty_label.place_forget()
 
     def open_form(self, patient=None):
         PatientForm(self, patient, on_save=self.load_patients)
@@ -119,25 +127,36 @@ class PatientForm(tk.Toplevel):
             self._populate(patient)
 
     def _build_ui(self):
-        fields = [
-            ("Full Name",   "name"),
-            ("Age",         "age"),
-            ("Gender",      "gender"),
-            ("Phone",       "phone"),
-            ("Address",     "address"),
-            ("Blood Type",  "blood_type"),
-        ]
         self.vars = {}
-        for i, (label, key) in enumerate(fields):
-            tk.Label(self, text=label + ":", anchor="e", width=12).grid(
-                row=i, column=0, padx=10, pady=8, sticky="e")
+
+        def row(r, label, widget_fn):
+            tk.Label(self, text=label + ":", anchor="e", width=12,
+                     font=("Arial", 10)).grid(row=r, column=0, padx=10, pady=8, sticky="e")
+            return widget_fn(r)
+
+        def entry(r):
             var = tk.StringVar()
-            self.vars[key] = var
-            tk.Entry(self, textvariable=var, width=25).grid(row=i, column=1, padx=10)
+            tk.Entry(self, textvariable=var, width=27, font=("Arial", 10)).grid(
+                row=r, column=1, padx=10, sticky="w")
+            return var
+
+        def combo(r, values):
+            var = tk.StringVar()
+            ttk.Combobox(self, textvariable=var, values=values,
+                         state="readonly", width=25).grid(
+                row=r, column=1, padx=10, sticky="w")
+            return var
+
+        self.vars["name"]       = row(0, "Full Name",  entry)
+        self.vars["age"]        = row(1, "Age",         entry)
+        self.vars["gender"]     = row(2, "Gender",      lambda r: combo(r, ["Male", "Female", "Other"]))
+        self.vars["phone"]      = row(3, "Phone",       entry)
+        self.vars["address"]    = row(4, "Address",     entry)
+        self.vars["blood_type"] = row(5, "Blood Type",  lambda r: combo(r, ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "Unknown"]))
 
         tk.Button(self, text="Save", bg="#27ae60", fg="white", relief="flat",
-                  padx=20, pady=5, command=self.save).grid(
-                  row=len(fields), column=0, columnspan=2, pady=15)
+                  font=("Arial", 11), padx=20, pady=6, command=self.save).grid(
+                  row=6, column=0, columnspan=2, pady=15)
 
     def _populate(self, patient):
         # patient = (id, name, age, gender, phone, address, blood_type)
@@ -151,9 +170,20 @@ class PatientForm(tk.Toplevel):
             messagebox.showwarning("Required", "Name is required.", parent=self)
             return
 
+        age_str = self.vars["age"].get().strip()
+        age = None
+        if age_str:
+            try:
+                age = int(age_str)
+                if age < 0 or age > 150:
+                    raise ValueError
+            except ValueError:
+                messagebox.showerror("Invalid Age", "Age must be a whole number (0–150).", parent=self)
+                return
+
         data = (
             name,
-            self.vars["age"].get().strip(),
+            age,
             self.vars["gender"].get().strip(),
             self.vars["phone"].get().strip(),
             self.vars["address"].get().strip(),

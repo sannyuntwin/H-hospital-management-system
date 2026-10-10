@@ -4,6 +4,12 @@ from datetime import date
 import database
 from ui.utils import set_icon
 
+try:
+    from tkcalendar import DateEntry
+    _HAS_CAL = True
+except ImportError:
+    _HAS_CAL = False
+
 class MedicalRecordsPage(tk.Frame):
     def __init__(self, parent):
         super().__init__(parent, bg="#ecf0f1")
@@ -48,6 +54,9 @@ class MedicalRecordsPage(tk.Frame):
         self.tree.pack(fill="both", expand=True, padx=20, pady=5)
         scrollbar.pack(side="right", fill="y")
 
+        self.empty_label = tk.Label(self.tree, text="No medical records found.",
+                                    bg="white", fg="#95a5a6", font=("Arial", 12))
+
         self.tree.bind("<Double-1>", lambda e: self.view_selected())
 
         # ── Action Buttons ───────────────────────────────
@@ -85,6 +94,11 @@ class MedicalRecordsPage(tk.Frame):
 
             for row in cursor.fetchall():
                 self.tree.insert("", "end", values=row)
+
+        if not self.tree.get_children():
+            self.empty_label.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.empty_label.place_forget()
 
     def open_form(self, record=None):
         MedicalRecordForm(self, record, on_save=self.load_records)
@@ -163,9 +177,15 @@ class MedicalRecordForm(tk.Toplevel):
         # Visit Date
         tk.Label(self, text="Visit Date:", anchor="e", width=14).grid(
             row=2, column=0, padx=10, pady=8, sticky="e")
-        self.vars["visit_date"] = tk.StringVar(value=str(date.today()))
-        tk.Entry(self, textvariable=self.vars["visit_date"], width=32).grid(
-            row=2, column=1, padx=10, sticky="w")
+        if _HAS_CAL:
+            self.date_entry = DateEntry(self, width=16, date_pattern="yyyy-mm-dd",
+                                        font=("Arial", 10), background="#2980b9",
+                                        foreground="white", borderwidth=2)
+            self.date_entry.grid(row=2, column=1, padx=10, sticky="w")
+        else:
+            self.vars["visit_date"] = tk.StringVar(value=str(date.today()))
+            tk.Entry(self, textvariable=self.vars["visit_date"], width=32).grid(
+                row=2, column=1, padx=10, sticky="w")
 
         # Diagnosis
         tk.Label(self, text="Diagnosis:", anchor="e", width=14).grid(
@@ -189,6 +209,21 @@ class MedicalRecordForm(tk.Toplevel):
                   padx=20, pady=5, command=self.save).grid(
                   row=6, column=0, columnspan=2, pady=10)
 
+    def _get_date(self):
+        if _HAS_CAL:
+            return self.date_entry.get_date().strftime("%Y-%m-%d")
+        return self.vars["visit_date"].get().strip()
+
+    def _set_date(self, val):
+        if _HAS_CAL and val:
+            try:
+                from datetime import datetime as _dt
+                self.date_entry.set_date(_dt.strptime(val, "%Y-%m-%d").date())
+            except Exception:
+                pass
+        elif not _HAS_CAL:
+            self.vars["visit_date"].set(val or str(date.today()))
+
     def _populate(self, record):
         # record = (id, patient_id, doctor_id, visit_date, diagnosis, prescription, notes)
         for p in self.patients:
@@ -197,7 +232,7 @@ class MedicalRecordForm(tk.Toplevel):
         for d in self.doctors:
             if d[0] == record[2]:
                 self.vars["doctor"].set(f"{d[0]} - {d[1]}")
-        self.vars["visit_date"].set(record[3] or "")
+        self._set_date(record[3])
         if record[4]:
             self.diagnosis_text.insert("1.0", record[4])
         if record[5]:
@@ -207,7 +242,7 @@ class MedicalRecordForm(tk.Toplevel):
 
     def save(self):
         patient_str  = self.vars["patient"].get()
-        visit_date   = self.vars["visit_date"].get().strip()
+        visit_date   = self._get_date()
         diagnosis    = self.diagnosis_text.get("1.0", "end").strip()
         prescription = self.prescription_text.get("1.0", "end").strip()
         notes        = self.notes_text.get("1.0", "end").strip()

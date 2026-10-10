@@ -38,9 +38,15 @@ def create_tables():
                 gender TEXT,
                 phone TEXT,
                 address TEXT,
-                blood_type TEXT
+                blood_type TEXT,
+                created_at TEXT DEFAULT (date('now'))
             )
         """)
+        # Add created_at to existing databases that don't have it
+        try:
+            cursor.execute("ALTER TABLE patients ADD COLUMN created_at TEXT DEFAULT (date('now'))")
+        except Exception:
+            pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS doctors (

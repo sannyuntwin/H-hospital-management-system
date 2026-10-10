@@ -3,8 +3,9 @@ from tkinter import messagebox
 import database
 
 class SettingsPage(tk.Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, user=None):
         super().__init__(parent, bg="#ecf0f1")
+        self.user = user  # (id, username, password, role)
         self._build_ui()
         self.load_settings()
 
@@ -47,6 +48,33 @@ class SettingsPage(tk.Frame):
                   cursor="hand2", command=self.save_settings).grid(
                   row=len(fields)+1, column=1, sticky="e", pady=10, padx=10)
 
+        # ── Change Password ──────────────────────────────
+        tk.Label(self, text="Change Password", font=("Arial", 13, "bold"),
+                 bg="#ecf0f1").pack(anchor="w", padx=25, pady=(10, 5))
+
+        pw_form = tk.Frame(self, bg="#ecf0f1")
+        pw_form.pack(padx=40, anchor="w")
+
+        pw_fields = [
+            ("Current Password",  "current_pw"),
+            ("New Password",      "new_pw"),
+            ("Confirm Password",  "confirm_pw"),
+        ]
+        self.pw_vars = {}
+        for i, (label, key) in enumerate(pw_fields):
+            tk.Label(pw_form, text=label + ":", anchor="e", width=16,
+                     bg="#ecf0f1", font=("Arial", 10)).grid(
+                     row=i, column=0, pady=8, padx=10, sticky="e")
+            var = tk.StringVar()
+            self.pw_vars[key] = var
+            tk.Entry(pw_form, textvariable=var, show="*", width=30,
+                     font=("Arial", 10)).grid(row=i, column=1, padx=10)
+
+        tk.Button(pw_form, text="Change Password", bg="#2980b9", fg="white",
+                  font=("Arial", 11), relief="flat", padx=20, pady=6,
+                  cursor="hand2", command=self.change_password).grid(
+                  row=len(pw_fields), column=1, sticky="e", pady=10, padx=10)
+
     def load_settings(self):
         with database.get_connection() as conn:
             cursor = conn.cursor()
@@ -76,3 +104,32 @@ class SettingsPage(tk.Frame):
             conn.commit()
 
         messagebox.showinfo("Saved", "Settings saved successfully.")
+
+    def change_password(self):
+        current = self.pw_vars["current_pw"].get()
+        new_pw  = self.pw_vars["new_pw"].get()
+        confirm = self.pw_vars["confirm_pw"].get()
+
+        if not all([current, new_pw, confirm]):
+            messagebox.showwarning("Required", "All password fields are required.", parent=self)
+            return
+        if len(new_pw) < 6:
+            messagebox.showwarning("Too Short", "New password must be at least 6 characters.", parent=self)
+            return
+        if new_pw != confirm:
+            messagebox.showerror("Mismatch", "New password and confirm password do not match.", parent=self)
+            return
+
+        username = self.user[1] if self.user else "admin"
+        with database.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users WHERE username=? AND password=?", (username, current))
+            if not cursor.fetchone():
+                messagebox.showerror("Wrong Password", "Current password is incorrect.", parent=self)
+                return
+            conn.execute("UPDATE users SET password=? WHERE username=?", (new_pw, username))
+            conn.commit()
+
+        for var in self.pw_vars.values():
+            var.set("")
+        messagebox.showinfo("Done", "Password changed successfully.")

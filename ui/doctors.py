@@ -46,6 +46,9 @@ class DoctorsPage(tk.Frame):
         self.tree.pack(fill="both", expand=True, padx=20, pady=5)
         scrollbar.pack(side="right", fill="y")
 
+        self.empty_label = tk.Label(self.tree, text="No doctors found.",
+                                    bg="white", fg="#95a5a6", font=("Arial", 12))
+
         # ── Action Buttons ───────────────────────────────
         btn_frame = tk.Frame(self, bg="#ecf0f1")
         btn_frame.pack(pady=8)
@@ -74,6 +77,11 @@ class DoctorsPage(tk.Frame):
 
             for row in cursor.fetchall():
                 self.tree.insert("", "end", values=row)
+
+        if not self.tree.get_children():
+            self.empty_label.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.empty_label.place_forget()
 
     def open_form(self, doctor=None):
         DoctorForm(self, doctor, on_save=self.load_doctors)
@@ -119,23 +127,44 @@ class DoctorForm(tk.Toplevel):
             self._populate(doctor)
 
     def _build_ui(self):
-        fields = [
-            ("Full Name",       "name"),
-            ("Specialization",  "specialization"),
-            ("Phone",           "phone"),
-            ("Email",           "email"),
-        ]
         self.vars = {}
-        for i, (label, key) in enumerate(fields):
-            tk.Label(self, text=label + ":", anchor="e", width=14).grid(
-                row=i, column=0, padx=10, pady=10, sticky="e")
-            var = tk.StringVar()
-            self.vars[key] = var
-            tk.Entry(self, textvariable=var, width=25).grid(row=i, column=1, padx=10)
+        lbl_opts = dict(anchor="e", width=14, font=("Arial", 10))
+
+        # Name
+        tk.Label(self, text="Full Name:", **lbl_opts).grid(row=0, column=0, padx=10, pady=10, sticky="e")
+        self.vars["name"] = tk.StringVar()
+        tk.Entry(self, textvariable=self.vars["name"], width=27,
+                 font=("Arial", 10)).grid(row=0, column=1, padx=10)
+
+        # Specialization — dropdown
+        tk.Label(self, text="Specialization:", **lbl_opts).grid(row=1, column=0, padx=10, pady=10, sticky="e")
+        self.vars["specialization"] = tk.StringVar()
+        specs = [
+            "General Practitioner", "Internal Medicine", "Pediatrics",
+            "Obstetrics & Gynecology", "Surgery", "Orthopedics",
+            "Cardiology", "Neurology", "Dermatology", "Ophthalmology",
+            "ENT (Ear, Nose & Throat)", "Psychiatry", "Radiology",
+            "Anesthesiology", "Emergency Medicine", "Dentistry", "Other",
+        ]
+        ttk.Combobox(self, textvariable=self.vars["specialization"],
+                     values=specs, width=25,
+                     font=("Arial", 10)).grid(row=1, column=1, padx=10)
+
+        # Phone
+        tk.Label(self, text="Phone:", **lbl_opts).grid(row=2, column=0, padx=10, pady=10, sticky="e")
+        self.vars["phone"] = tk.StringVar()
+        tk.Entry(self, textvariable=self.vars["phone"], width=27,
+                 font=("Arial", 10)).grid(row=2, column=1, padx=10)
+
+        # Email
+        tk.Label(self, text="Email:", **lbl_opts).grid(row=3, column=0, padx=10, pady=10, sticky="e")
+        self.vars["email"] = tk.StringVar()
+        tk.Entry(self, textvariable=self.vars["email"], width=27,
+                 font=("Arial", 10)).grid(row=3, column=1, padx=10)
 
         tk.Button(self, text="Save", bg="#27ae60", fg="white", relief="flat",
-                  padx=20, pady=5, command=self.save).grid(
-                  row=len(fields), column=0, columnspan=2, pady=15)
+                  font=("Arial", 11), padx=20, pady=6, command=self.save).grid(
+                  row=4, column=0, columnspan=2, pady=15)
 
     def _populate(self, doctor):
         # doctor = (id, name, specialization, phone, email)

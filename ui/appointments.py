@@ -54,6 +54,9 @@ class AppointmentsPage(tk.Frame):
         self.tree.pack(fill="both", expand=True, padx=20, pady=5)
         scrollbar.pack(side="right", fill="y")
 
+        self.empty_label = tk.Label(self.tree, text="No appointments found.",
+                                    bg="white", fg="#95a5a6", font=("Arial", 12))
+
         # ── Action Buttons ───────────────────────────────
         btn_frame = tk.Frame(self, bg="#ecf0f1")
         btn_frame.pack(pady=8)
@@ -93,6 +96,11 @@ class AppointmentsPage(tk.Frame):
             for row in cursor.fetchall():
                 tag = row[5]  # status column
                 self.tree.insert("", "end", values=row, tags=(tag,))
+
+        if not self.tree.get_children():
+            self.empty_label.place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            self.empty_label.place_forget()
 
     def open_form(self, appointment=None):
         AppointmentForm(self, appointment, on_save=self.load_appointments)
@@ -134,13 +142,20 @@ class AppointmentsPage(tk.Frame):
             self.load_appointments()
 
 
+try:
+    from tkcalendar import DateEntry
+    _HAS_CAL = True
+except ImportError:
+    _HAS_CAL = False
+
+
 class AppointmentForm(tk.Toplevel):
     def __init__(self, parent, appointment=None, on_save=None):
         super().__init__(parent)
         self.appointment = appointment
         self.on_save = on_save
         self.title("Edit Appointment" if appointment else "Book Appointment")
-        self.geometry("400x340")
+        self.geometry("420x320")
         self.resizable(False, False)
         set_icon(self)
         self.grab_set()
@@ -154,82 +169,109 @@ class AppointmentForm(tk.Toplevel):
         with database.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT id, name FROM patients ORDER BY name")
-            self.patients = cursor.fetchall()  # [(id, name), ...]
+            self.patients = cursor.fetchall()
             cursor.execute("SELECT id, name FROM doctors ORDER BY name")
             self.doctors = cursor.fetchall()
 
     def _build_ui(self):
         self.vars = {}
 
-        # Patient dropdown
-        tk.Label(self, text="Patient:", anchor="e", width=12).grid(
-            row=0, column=0, padx=10, pady=10, sticky="e")
+        lbl_opts = dict(anchor="e", width=12, font=("Arial", 10))
+
+        # Patient
+        tk.Label(self, text="Patient:", **lbl_opts).grid(row=0, column=0, padx=10, pady=9, sticky="e")
         self.vars["patient"] = tk.StringVar()
         patient_names = [f"{p[0]} - {p[1]}" for p in self.patients]
         ttk.Combobox(self, textvariable=self.vars["patient"],
-                     values=patient_names, state="readonly", width=25).grid(
-                     row=0, column=1, padx=10)
+                     values=patient_names, state="readonly", width=27).grid(row=0, column=1, padx=10, columnspan=2, sticky="w")
 
-        # Doctor dropdown
-        tk.Label(self, text="Doctor:", anchor="e", width=12).grid(
-            row=1, column=0, padx=10, pady=10, sticky="e")
+        # Doctor
+        tk.Label(self, text="Doctor:", **lbl_opts).grid(row=1, column=0, padx=10, pady=9, sticky="e")
         self.vars["doctor"] = tk.StringVar()
         doctor_names = [f"{d[0]} - {d[1]}" for d in self.doctors]
         ttk.Combobox(self, textvariable=self.vars["doctor"],
-                     values=doctor_names, state="readonly", width=25).grid(
-                     row=1, column=1, padx=10)
+                     values=doctor_names, state="readonly", width=27).grid(row=1, column=1, padx=10, columnspan=2, sticky="w")
 
         # Date
-        tk.Label(self, text="Date:", anchor="e", width=12).grid(
-            row=2, column=0, padx=10, pady=10, sticky="e")
-        self.vars["date"] = tk.StringVar()
-        tk.Entry(self, textvariable=self.vars["date"], width=27).grid(
-            row=2, column=1, padx=10)
-        tk.Label(self, text="Format: YYYY-MM-DD", font=("Arial", 8),
-                 fg="gray").grid(row=3, column=1, sticky="w", padx=10)
+        tk.Label(self, text="Date:", **lbl_opts).grid(row=2, column=0, padx=10, pady=9, sticky="e")
+        if _HAS_CAL:
+            from datetime import date as _date
+            self.date_entry = DateEntry(self, width=16, date_pattern="yyyy-mm-dd",
+                                        font=("Arial", 10), background="#2980b9",
+                                        foreground="white", borderwidth=2)
+            self.date_entry.grid(row=2, column=1, padx=10, columnspan=2, sticky="w")
+        else:
+            self.vars["date"] = tk.StringVar()
+            tk.Entry(self, textvariable=self.vars["date"], width=18,
+                     font=("Arial", 10)).grid(row=2, column=1, padx=10, columnspan=2, sticky="w")
 
-        # Time
-        tk.Label(self, text="Time:", anchor="e", width=12).grid(
-            row=4, column=0, padx=10, pady=10, sticky="e")
-        self.vars["time"] = tk.StringVar()
-        tk.Entry(self, textvariable=self.vars["time"], width=27).grid(
-            row=4, column=1, padx=10)
-        tk.Label(self, text="Format: HH:MM (e.g. 09:30)", font=("Arial", 8),
-                 fg="gray").grid(row=5, column=1, sticky="w", padx=10)
+        # Time — hour + minute spinboxes
+        tk.Label(self, text="Time:", **lbl_opts).grid(row=3, column=0, padx=10, pady=9, sticky="e")
+        time_frame = tk.Frame(self)
+        time_frame.grid(row=3, column=1, padx=10, columnspan=2, sticky="w")
+        self.hour_var   = tk.StringVar(value="09")
+        self.minute_var = tk.StringVar(value="00")
+        hours   = [f"{h:02d}" for h in range(0, 24)]
+        minutes = [f"{m:02d}" for m in range(0, 60, 5)]
+        ttk.Combobox(time_frame, textvariable=self.hour_var,   values=hours,
+                     state="readonly", width=4, font=("Arial", 10)).pack(side="left")
+        tk.Label(time_frame, text=" : ", font=("Arial", 11, "bold")).pack(side="left")
+        ttk.Combobox(time_frame, textvariable=self.minute_var, values=minutes,
+                     state="readonly", width=4, font=("Arial", 10)).pack(side="left")
+        tk.Label(time_frame, text="  (HH : MM)", fg="gray",
+                 font=("Arial", 8)).pack(side="left", padx=4)
 
         # Status
-        tk.Label(self, text="Status:", anchor="e", width=12).grid(
-            row=6, column=0, padx=10, pady=10, sticky="e")
+        tk.Label(self, text="Status:", **lbl_opts).grid(row=4, column=0, padx=10, pady=9, sticky="e")
         self.vars["status"] = tk.StringVar(value="scheduled")
         ttk.Combobox(self, textvariable=self.vars["status"],
                      values=["scheduled", "completed", "cancelled"],
-                     state="readonly", width=25).grid(row=6, column=1, padx=10)
+                     state="readonly", width=27).grid(row=4, column=1, padx=10, columnspan=2, sticky="w")
 
         tk.Button(self, text="Save", bg="#27ae60", fg="white", relief="flat",
-                  padx=20, pady=5, command=self.save).grid(
-                  row=7, column=0, columnspan=2, pady=15)
+                  font=("Arial", 11), padx=20, pady=6, command=self.save).grid(
+                  row=5, column=0, columnspan=3, pady=15)
+
+    def _get_date(self):
+        if _HAS_CAL:
+            return self.date_entry.get_date().strftime("%Y-%m-%d")
+        return self.vars["date"].get().strip()
+
+    def _set_date(self, val):
+        if _HAS_CAL and val:
+            try:
+                from datetime import datetime
+                self.date_entry.set_date(datetime.strptime(val, "%Y-%m-%d").date())
+            except Exception:
+                pass
+        elif not _HAS_CAL:
+            self.vars["date"].set(val or "")
 
     def _populate(self, appointment):
-        # appointment = (id, patient_id, doctor_id, date, time, status)
-        for i, p in enumerate(self.patients):
+        for p in self.patients:
             if p[0] == appointment[1]:
                 self.vars["patient"].set(f"{p[0]} - {p[1]}")
-        for i, d in enumerate(self.doctors):
+        for d in self.doctors:
             if d[0] == appointment[2]:
                 self.vars["doctor"].set(f"{d[0]} - {d[1]}")
-        self.vars["date"].set(appointment[3])
-        self.vars["time"].set(appointment[4])
+        self._set_date(appointment[3])
+        if appointment[4]:
+            parts = str(appointment[4]).split(":")
+            self.hour_var.set(parts[0].zfill(2) if parts else "09")
+            # round minute to nearest 5
+            min_val = int(parts[1]) if len(parts) > 1 else 0
+            self.minute_var.set(f"{(min_val // 5) * 5:02d}")
         self.vars["status"].set(appointment[5])
 
     def save(self):
         patient_str = self.vars["patient"].get()
         doctor_str  = self.vars["doctor"].get()
-        date        = self.vars["date"].get().strip()
-        time        = self.vars["time"].get().strip()
+        appt_date   = self._get_date()
+        appt_time   = f"{self.hour_var.get()}:{self.minute_var.get()}"
         status      = self.vars["status"].get()
 
-        if not all([patient_str, doctor_str, date, time]):
-            messagebox.showwarning("Required", "All fields are required.", parent=self)
+        if not all([patient_str, doctor_str, appt_date]):
+            messagebox.showwarning("Required", "Patient, Doctor, and Date are required.", parent=self)
             return
 
         patient_id = int(patient_str.split(" - ")[0])
@@ -241,12 +283,12 @@ class AppointmentForm(tk.Toplevel):
                     UPDATE appointments
                     SET patient_id=?, doctor_id=?, date=?, time=?, status=?
                     WHERE id=?
-                """, (patient_id, doctor_id, date, time, status, self.appointment[0]))
+                """, (patient_id, doctor_id, appt_date, appt_time, status, self.appointment[0]))
             else:
                 conn.execute("""
                     INSERT INTO appointments (patient_id, doctor_id, date, time, status)
                     VALUES (?, ?, ?, ?, ?)
-                """, (patient_id, doctor_id, date, time, status))
+                """, (patient_id, doctor_id, appt_date, appt_time, status))
             conn.commit()
 
         if self.on_save:

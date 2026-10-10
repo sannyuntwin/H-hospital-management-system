@@ -65,6 +65,12 @@ class HomePage(tk.Frame):
                   relief="flat", padx=15, pady=4, cursor="hand2",
                   command=self.load_stats).pack(anchor="e", padx=25, pady=8)
 
+        self.after(60000, self._auto_refresh)
+
+    def _auto_refresh(self):
+        self.load_stats()
+        self.after(60000, self._auto_refresh)
+
     def load_stats(self):
         today = str(date.today())
 

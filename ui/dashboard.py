@@ -47,24 +47,32 @@ class Dashboard(tk.Toplevel):
 
         ttk.Separator(sidebar, orient="horizontal").pack(fill="x", padx=10)
 
-        # Sidebar buttons
-        pages = [
-            ("Home",          "home"), 
-            ("Patients",      "patients"),
-            ("Doctors",       "doctors"),
-            ("Medical Records", "medical_records"),
-            ("Appointments",  "appointments"),
-            ("Billing",       "billing"),
-            ("Settings", "settings"),
+        # Sidebar buttons — filtered by role
+        role = self.user[3] if self.user else "receptionist"
+
+        all_pages = [
+            ("Home",            "home",            ["admin", "receptionist"]),
+            ("Patients",        "patients",        ["admin", "receptionist"]),
+            ("Doctors",         "doctors",         ["admin", "receptionist"]),
+            ("Medical Records", "medical_records", ["admin", "receptionist"]),
+            ("Appointments",    "appointments",    ["admin", "receptionist"]),
+            ("Billing",         "billing",         ["admin", "receptionist"]),
+            ("Reports",         "reports",         ["admin"]),
+            ("Users",           "users",           ["admin"]),
+            ("Backup & Export", "backup",          ["admin"]),
+            ("Settings",        "settings",        ["admin"]),
+            ("About",           "about",           ["admin", "receptionist"]),
         ]
-        for label, page_name in pages:
-            tk.Button(
-                sidebar, text=label, bg="#34495e", fg="white",
-                font=("Arial", 11), relief="flat", cursor="hand2",
-                activebackground="#1abc9c", activeforeground="white",
-                width=18, pady=8,
-                command=lambda p=page_name: self.show_page(p)
-            ).pack(pady=2, padx=10)
+
+        for label, page_name, allowed_roles in all_pages:
+            if role in allowed_roles:
+                tk.Button(
+                    sidebar, text=label, bg="#34495e", fg="white",
+                    font=("Arial", 11), relief="flat", cursor="hand2",
+                    activebackground="#1abc9c", activeforeground="white",
+                    width=18, pady=8,
+                    command=lambda p=page_name: self.show_page(p)
+                ).pack(pady=2, padx=10)
 
         tk.Button(
             sidebar, text="Logout", bg="#e74c3c", fg="white",
@@ -100,9 +108,21 @@ class Dashboard(tk.Toplevel):
                 from ui.billing import BillingPage
                 self.pages[name] = BillingPage(self.content)
                 
+            elif name == "reports":
+                from ui.reports import ReportsPage
+                self.pages[name] = ReportsPage(self.content)
+            elif name == "users":
+                from ui.users import UsersPage
+                self.pages[name] = UsersPage(self.content)
+            elif name == "backup":
+                from ui.backup import BackupPage
+                self.pages[name] = BackupPage(self.content)
             elif name == "settings":
                 from ui.settings_page import SettingsPage
-                self.pages[name] = SettingsPage(self.content)
+                self.pages[name] = SettingsPage(self.content, user=self.user)
+            elif name == "about":
+                from ui.about_page import AboutPage
+                self.pages[name] = AboutPage(self.content)
 
 
         # Hide all, show the selected one
