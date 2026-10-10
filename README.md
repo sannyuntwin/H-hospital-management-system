@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="H-Hospital Logo" width="80"/>
+</p>
+
 # H-Hospital Management System
 
 A desktop hospital/clinic management system built with Python. Runs as a standalone `.exe` on Windows — no internet connection or server required.
